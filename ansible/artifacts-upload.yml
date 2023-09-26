@@ -1,10 +1,17 @@
 ---
-- hosts: local
+- hosts: localhost
   become: yes
   vars_files:
     - "{{inventory_dir}}/secrets.yml"
-  environment:
-    AZURE_STORAGE_ACCOUNT: "{{sunbird_artifact_storage_account_name}}"
-    AZURE_STORAGE_SAS_TOKEN: "{{sunbird_artifact_storage_account_sas}}"
-  roles:
-    - artifacts-upload-azure
+  tasks:
+    - name: upload artifact to oci oss
+      include_role:
+        name: oci-cloud-storage
+        apply:
+          environment:
+           OCI_CLI_AUTH: "instance_principal"
+        tasks_from: upload.yml
+      vars:
+        local_file_or_folder_path: "{{ artifact_path }}"
+        oss_bucket_name: "{{ artifacts_container }}"
+        oss_path: "{{ artifact }}"
