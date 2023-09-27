@@ -5,6 +5,11 @@ repository: {{flink_repository|default('knowledge-platform-jobs')}}
 image_tag: {{ image_tag }}
 azure_account: {{ azure_account }}
 azure_secret: {{ azure_secret }}
+s3_access_key: {{ s3_storage_key }}
+s3_secret_key: {{ s3_storage_secret }}
+s3_endpoint: {{ s3_storage_endpoint }}
+s3_path_style_access: {{ s3_path_style_access }}
+
 serviceMonitor:
   enabled: {{ service_monitor_enabled | lower}}
 
@@ -38,8 +43,8 @@ log4j_console_properties: |
   rootLogger.appenderRef.console.ref = ConsoleAppender
 
   # Uncomment this if you want to _only_ change Flink's logging
-  #logger.flink.name = org.apache.flink
-  #logger.flink.level = {{ flink_jobs_console_log_level | default(INFO) }}
+  logger.flink.name = org.apache.flink
+  logger.flink.level = {{ flink_jobs_console_log_level | default(INFO) }}
 
   # The following lines keep the log level of common libraries/connectors on
   # log level INFO. The root logger does not override this. You have to manually
@@ -77,12 +82,12 @@ base_config: |
       statebackend {
         blob {
           storage {
-            account = "{{ azure_account }}.blob.core.windows.net"
+            endpoint = "{{ s3_storage_endpoint }}"
             container = "{{ flink_container_name }}"
             checkpointing.dir = "checkpoint"
           }
         }
-        base.url = "wasbs://"${job.statebackend.blob.storage.container}"@"${job.statebackend.blob.storage.account}"/"${job.statebackend.blob.storage.checkpointing.dir}
+        base.url = "s3://"${job.statebackend.blob.storage.container}"/"${job.statebackend.blob.storage.checkpointing.dir}
       }
     }
     task {
@@ -523,72 +528,6 @@ auto-creator-v2:
     jobmanager.memory.flink.size: {{ flink_job_names['auto-creator-v2'].jobmanager_memory }}
     taskmanager.memory.flink.size: {{ flink_job_names['auto-creator-v2'].taskmanager_memory }}
     taskmanager.numberOfTaskSlots: {{ flink_job_names['auto-creator-v2'].taskslots }}
-    parallelism.default: 1
-    jobmanager.execution.failover-strategy: region
-    taskmanager.memory.network.fraction: 0.1
-
-
-content-auto-creator:
-  content-auto-creator: |+
-    include file("/data/flink/conf/base-config.conf")
-    kafka {
-      input.topic = "{{ env_name }}.auto.creation.job.request"
-      groupId = "{{ env_name }}-content-auto-creator-group"
-      failed.topic = "{{ env_name }}.auto.creation.job.request.failed"
-    }
-
-    task {
-      consumer.parallelism = {{ content_auto_creator_consumer_parallelism }}
-      parallelism = {{ content_auto_creator_parallelism }}
-      window.time = 60
-    }
-
-    redis {
-      database {
-        relationCache.id = 10
-        collectionCache.id = 5
-      }
-    }
-
-    service {
-      content_service.basePath = "{{ kp_content_service_base_url }}"
-      search.basePath = "{{ kp_search_service_base_url }}"
-      lms.basePath = "{{ lms_service_base_url }}"
-      learning_service.basePath = "{{ kp_learning_service_base_url }}"
-    }
-
-    cloud_storage_type="{{ cloud_store }}"
-    azure_storage_key="{{ sunbird_public_storage_account_name }}"
-    azure_storage_secret="{{ sunbird_public_storage_account_key }}"
-    azure_storage_container="{{ azure_public_container }}"
-
-    content_auto_creator {
-        actions=auto-create
-        allowed_object_types=["Content"]
-        allowed_content_stages=["create","upload","review","publish"]
-        content_mandatory_fields=["name","code","mimeType","primaryCategory","artifactUrl","lastPublishedBy"]
-        content_props_to_removed=["identifier","downloadUrl","variants","createdOn","collections","children","lastUpdatedOn","SYS_INTERNAL_LAST_UPDATED_ON","versionKey","s3Key","status","pkgVersion","toc_url","mimeTypesCount","contentTypesCount","leafNodesCount","childNodes","prevState","lastPublishedOn","flagReasons","compatibilityLevel","size","publishChecklist","publishComment","lastPublishedBy","rejectReasons","rejectComment","badgeAssertions","leafNodes","sYS_INTERNAL_LAST_UPDATED_ON","previewUrl","channel","objectType","visibility","version","pragma","prevStatus","streamingUrl","idealScreenSize","contentDisposition","lastStatusChangedOn","idealScreenDensity","lastSubmittedOn","publishError","flaggedBy","flags","lastFlaggedOn","publisher","lastUpdatedBy","lastSubmittedBy","uploadError","lockKey","publish_type","reviewError","totalCompressedSize","origin","originData","importError","questions"]
-        bulk_upload_mime_types=["video/mp4"]
-        artifact_upload_max_size=52428800
-        content_create_props=["name","code","mimeType","contentType","framework","processId","primaryCategory"]
-        artifact_upload_allowed_source=[]
-        g_service_acct_cred="{{ auto_creator_g_service_acct_cred }}"
-        gdrive.application_name=drive-download
-        initial_backoff_delay=120000
-        maximum_backoff_delay=1200000
-        increment_backoff_delay=2
-        api_call_delay=1
-        maxIteration=1
-    }
-
-    search_exists_fields=["originData"]
-    search_fields=["identifier","mimeType","pkgVersion","channel","status","origin","originData","artifactUrl"]
-
-
-  flink-conf: |+
-    jobmanager.memory.flink.size: {{ flink_job_names['content-auto-creator'].jobmanager_memory }}
-    taskmanager.memory.flink.size: {{ flink_job_names['content-auto-creator'].taskmanager_memory }}
-    taskmanager.numberOfTaskSlots: {{ flink_job_names['content-auto-creator'].taskslots }}
     parallelism.default: 1
     jobmanager.execution.failover-strategy: region
     taskmanager.memory.network.fraction: 0.1
